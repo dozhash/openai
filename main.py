@@ -2,6 +2,10 @@ import os
 from fastapi import UploadFile, Form, File
 import openai
 import io
+from fastapi import FastAPI
+
+app = FastAPI()
+
 
 # Set OpenAI key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
