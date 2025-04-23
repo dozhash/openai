@@ -1,10 +1,10 @@
 import os
-from fastapi import UploadFile, Form, File, FastAPI
 import openai
+import base64
+from fastapi import FastAPI, UploadFile, File, Form
 
 app = FastAPI()
 
-# Set OpenAI key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.post("/smart-correct/")
@@ -14,10 +14,12 @@ async def smart_correct(
 ):
     user_text = ""
 
-    # Step 1: Use OpenAI Vision to extract text if image is uploaded
+    # Step 1: Extract text using OpenAI Vision
     if file:
         try:
             image_data = await file.read()
+            base64_image = base64.b64encode(image_data).decode("utf-8")
+            image_url = f"data:image/jpeg;base64,{base64_image}"
 
             response = openai.ChatCompletion.create(
                 model="gpt-4o",
@@ -27,9 +29,7 @@ async def smart_correct(
                         "role": "user",
                         "content": [
                             {"type": "text", "text": "Extract the text from this image."},
-                            {"type": "image_url", "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_data.decode('latin1').encode('base64').decode()}"
-                            }},
+                            {"type": "image_url", "image_url": {"url": image_url}},
                         ]
                     }
                 ],
