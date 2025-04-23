@@ -1,49 +1,47 @@
-from fastapi import FastAPI, UploadFile, Form
-from fastapi.responses import JSONResponse
-from transformers import TrOCRProcessor, VisionEncoderDecoderModel
-from PIL import Image
-from textblob import TextBlob
-import spacy
-import torch
-import language_tool_python
+from fastapi import UploadFile, Form, File
+import openai
 import io
 
-# Load everything once
-processor = TrOCRProcessor.from_pretrained("microsoft/trocr-small-handwritten")
-model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-small-handwritten")
+# Set OpenAI key from environment variable
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-nlp = spacy.load("en_core_web_sm")
-tool = language_tool_python.LanguageTool('en-US')
-
-app = FastAPI()
-
-@app.post("/analyze/")
-async def analyze(file: UploadFile = None, direct_text: str = Form("")):
+@app.post("/smart-correct/")
+async def smart_correct(
+    file: UploadFile = File(None),
+    direct_text: str = Form("")
+):
+    # Step 1: Extract text from image if image is uploaded
     if file:
-        img = Image.open(io.BytesIO(await file.read())).convert("RGB")
-        pixel_values = processor(images=img, return_tensors="pt").pixel_values
-        generated_ids = model.generate(pixel_values)
-        text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-        corrected_spelling = str(TextBlob(text).correct())
+        try:
+            img = Image.open(io.BytesIO(await file.read())).convert("RGB")
+            pixel_values = processor(images=img, return_tensors="pt").pixel_values
+            generated_ids = model.generate(pixel_values)
+            extracted_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            user_text = str(TextBlob(extracted_text).correct())
+        except Exception as e:
+            return {"error": f"Failed to process image: {str(e)}"}
     elif direct_text:
-        corrected_spelling = direct_text
+        user_text = direct_text
     else:
-        return {"error": "Please upload an image or enter text."}
+        return {"error": "Please provide either an image or text input."}
 
-    # Grammar checking
-    doc = nlp(corrected_spelling)
-    feedback = []
-    for sent in doc.sents:
-        sentence = sent.text.strip()
-        matches = tool.check(sentence)
-        corrected = language_tool_python.utils.correct(sentence, matches)
-        feedback.append({
-            "original": sentence,
-            "corrected": corrected,
-            "issues": [
-                {"message": m.message, "suggestions": m.replacements}
-                for m in matches
-            ]
-        })
+    # Step 2: Send text to OpenAI for correction
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",  # or "gpt-4"
+            messages=[
+                {"role": "system", "content": "You are a grammar correction assistant. Return the corrected sentence"},
+                {"role": "user", "content": f"Correct :\n\n{user_text}"}
+            ],
+            temperature=0.4
+        )
 
-    return JSONResponse(content={"input": corrected_spelling, "feedback": feedback})
+        reply = response["choices"][0]["message"]["content"]
+
+        return {
+            "input": user_text,
+            "feedback": reply
+        }
+
+    except Exception as e:
+        return {"error": f"OpenAI error: {str(e)}"}
