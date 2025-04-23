@@ -25,7 +25,7 @@ async def smart_correct(file: UploadFile = File(...)):
                     "content": [
                         {
                             "type": "text",
-                            "text": "Please read the handwritten text in this image and give English grammar feedback or corrections based on what the person wrote. Be constructive and helpful."
+                            "text": "Please read the text and check the spelling mistakes and grammar rule. For the misspelled words, give the 3 possible correct words. And, for the grammar rule fedback just be simple and spicific. In general, The feedback should not be perfect for now. Just basic correction as a week trained model."
                         },
                         {
                             "type": "image_url",
