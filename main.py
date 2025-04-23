@@ -1,13 +1,8 @@
 import os
-from fastapi import UploadFile, Form, File
+from fastapi import UploadFile, Form, File, FastAPI
 import openai
-import io
-from fastapi import FastAPI
-from PIL import Image
-
 
 app = FastAPI()
-
 
 # Set OpenAI key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -17,38 +12,57 @@ async def smart_correct(
     file: UploadFile = File(None),
     direct_text: str = Form("")
 ):
-    # Step 1: Extract text from image if image is uploaded
+    user_text = ""
+
+    # Step 1: Use OpenAI Vision to extract text if image is uploaded
     if file:
         try:
-            img = Image.open(io.BytesIO(await file.read())).convert("RGB")
-            pixel_values = processor(images=img, return_tensors="pt").pixel_values
-            generated_ids = model.generate(pixel_values)
-            extracted_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            user_text = str(TextBlob(extracted_text).correct())
+            image_data = await file.read()
+
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an assistant that extracts text from images and returns it."},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extract the text from this image."},
+                            {"type": "image_url", "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_data.decode('latin1').encode('base64').decode()}"
+                            }},
+                        ]
+                    }
+                ],
+                temperature=0.3
+            )
+
+            user_text = response["choices"][0]["message"]["content"]
+
         except Exception as e:
-            return {"error": f"Failed to process image: {str(e)}"}
+            return {"error": f"Failed to process image with OpenAI: {str(e)}"}
+
     elif direct_text:
         user_text = direct_text
     else:
         return {"error": "Please provide either an image or text input."}
 
-    # Step 2: Send text to OpenAI for correction
+    # Step 2: Grammar correction
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",  # or "gpt-4"
+        correction = openai.ChatCompletion.create(
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a grammar correction assistant. Return the corrected sentence"},
-                {"role": "user", "content": f"Correct :\n\n{user_text}"}
+                {"role": "system", "content": "You are a grammar correction assistant. Return the corrected sentence."},
+                {"role": "user", "content": f"Correct this text:\n\n{user_text}"}
             ],
             temperature=0.4
         )
 
-        reply = response["choices"][0]["message"]["content"]
+        corrected_text = correction["choices"][0]["message"]["content"]
 
         return {
             "input": user_text,
-            "feedback": reply
+            "feedback": corrected_text
         }
 
     except Exception as e:
-        return {"error": f"OpenAI error: {str(e)}"}
+        return {"error": f"OpenAI error during grammar correction: {str(e)}"}
