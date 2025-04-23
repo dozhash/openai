@@ -3,6 +3,8 @@ from fastapi import UploadFile, Form, File
 import openai
 import io
 from fastapi import FastAPI
+from PIL import Image
+
 
 app = FastAPI()
 
