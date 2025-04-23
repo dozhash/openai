@@ -1,3 +1,4 @@
+import os
 from fastapi import UploadFile, Form, File
 import openai
 import io
