@@ -9,8 +9,9 @@ import language_tool_python
 import io
 
 # Load everything once
-processor = TrOCRProcessor.from_pretrained("microsoft/trocr-large-handwritten")
-model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-large-handwritten")
+processor = TrOCRProcessor.from_pretrained("microsoft/trocr-small-handwritten")
+model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-small-handwritten")
+
 nlp = spacy.load("en_core_web_sm")
 tool = language_tool_python.LanguageTool('en-US')
 
